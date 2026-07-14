@@ -6,3 +6,8 @@ scikit-learn
 openpyxl
 jupyter
 nbformat
+streamlit
+streamlit-option-menu
+fpdf2
+xgboost
+joblib
