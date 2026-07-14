@@ -61,11 +61,8 @@ def plot_tenure_analysis():
     return fig
 
 def plot_feature_importance():
-    # Since we can't easily extract XGBoost importances from the pipeline directly without some work, 
-    # we'll plot a pre-computed or mock feature importance chart, or we can use linear correlation.
     df = get_df()
     
-    # We map Churn Label to 1/0
     if 'Churn Value' not in df.columns:
         df['Churn Value'] = df['Churn Label'].map({'Yes': 1, 'No': 0})
         
@@ -78,4 +75,34 @@ def plot_feature_importance():
     fig = px.bar(corr_df.head(10), x='Correlation', y='Feature', orientation='h',
                  color='Correlation', color_continuous_scale='RdBu_r')
     fig.update_layout(**theme_config, yaxis={'categoryorder':'total ascending'}, margin=dict(t=10, b=0, l=0, r=0))
+    return fig
+
+def plot_local_shap(shap_df):
+    """
+    Visualizes local SHAP feature contributions for a single prediction using Plotly.
+    Takes the top 10 absolute features.
+    """
+    top_n = shap_df.head(10).copy()
+    # Sort for bottom-up horizontal bar chart
+    top_n = top_n.sort_values(by='Contribution', ascending=True)
+    
+    # Assign colors: Red for pushing towards churn (>0), Green for pushing towards retention (<0)
+    top_n['Color'] = top_n['Contribution'].apply(lambda x: '#EF4444' if x > 0 else '#10B981')
+    
+    fig = go.Figure(go.Bar(
+        x=top_n['Contribution'],
+        y=top_n['Feature'],
+        orientation='h',
+        marker_color=top_n['Color']
+    ))
+    
+    fig.update_layout(
+        **theme_config,
+        title="Key Features Influencing This Prediction (SHAP)",
+        xaxis_title="Impact on Prediction (Log-Odds)",
+        yaxis_title="",
+        margin=dict(t=40, b=0, l=0, r=0),
+        xaxis=dict(zeroline=True, zerolinewidth=2, zerolinecolor='rgba(255,255,255,0.2)')
+    )
+    
     return fig

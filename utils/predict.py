@@ -4,6 +4,7 @@ import numpy as np
 import re
 from utils.preprocessing import engineer_features
 import os
+import shap
 
 # Define global caches for model and preprocessor to avoid reloading
 _PREPROCESSOR = None
@@ -65,9 +66,27 @@ def predict_churn(input_data):
     # 6. Predict Probability
     probability = model.predict_proba(X)[0][1]
     
-    return probability
+    # 7. Explainability via SHAP
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X)
+    
+    # Extract feature contributions for this single instance
+    feature_names = X.columns
+    contributions = shap_values[0]
+    
+    # Create DataFrame of top features
+    shap_df = pd.DataFrame({
+        'Feature': feature_names,
+        'Contribution': contributions
+    })
+    
+    # Sort by absolute contribution to find most impactful features
+    shap_df['Abs_Contribution'] = shap_df['Contribution'].abs()
+    shap_df = shap_df.sort_values(by='Abs_Contribution', ascending=False).drop(columns=['Abs_Contribution'])
+    
+    return probability, shap_df
 
-def generate_ai_insights(probability, input_data):
+def generate_ai_insights(probability, input_data, shap_df=None):
     """
     Generates automated business advice based on prediction.
     """
@@ -91,5 +110,19 @@ def generate_ai_insights(probability, input_data):
         insights.append("💡 **Recommendation**: Ideal candidate for cross-selling premium add-ons or referral programs.")
         if input_data.get('Internet Service') == 'Fiber optic':
             insights.append("💡 **Recommendation**: Suggest premium streaming packages to maximize their high-speed connection.")
+            
+    # Add SHAP-based dynamic insights
+    if shap_df is not None and not shap_df.empty:
+        top_risk_feature = shap_df[shap_df['Contribution'] > 0].head(1)
+        top_retention_feature = shap_df[shap_df['Contribution'] < 0].head(1)
+        
+        insights.append("---")
+        insights.append("🔍 **AI Explainability Analysis:**")
+        if not top_risk_feature.empty:
+            feature_name = top_risk_feature['Feature'].values[0]
+            insights.append(f"- **Primary Risk Factor:** The model identified `{feature_name}` as the strongest factor pushing this customer towards churn.")
+        if not top_retention_feature.empty:
+            feature_name = top_retention_feature['Feature'].values[0]
+            insights.append(f"- **Primary Retention Factor:** Conversely, `{feature_name}` is the strongest factor keeping them subscribed.")
             
     return insights

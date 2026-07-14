@@ -20,7 +20,8 @@ from utils.charts import (
     plot_contract_distribution, 
     plot_monthly_charges,
     plot_tenure_analysis,
-    plot_feature_importance
+    plot_feature_importance,
+    plot_local_shap
 )
 from utils.helpers import generate_prediction_pdf
 
@@ -60,6 +61,8 @@ if 'risk_level' not in st.session_state:
     st.session_state['risk_level'] = "Low"
 if 'insights' not in st.session_state:
     st.session_state['insights'] = []
+if 'shap_df' not in st.session_state:
+    st.session_state['shap_df'] = None
 
 # --- PAGE: Home ---
 if selected == "Home":
@@ -168,23 +171,33 @@ elif selected == "Predict":
                 "Total Charges": total_charge
             }
             
-            with st.spinner("Analyzing customer profile via XGBoost model..."):
-                prob = predict_churn(input_dict)
-                insights = generate_ai_insights(prob, input_dict)
+            with st.spinner("Analyzing customer profile via XGBoost model and generating SHAP explanations..."):
+                prob, shap_df = predict_churn(input_dict)
+                insights = generate_ai_insights(prob, input_dict, shap_df)
                 
                 st.session_state['prediction_made'] = True
                 st.session_state['prediction_prob'] = prob
                 st.session_state['input_data'] = input_dict
                 st.session_state['insights'] = insights
+                st.session_state['shap_df'] = shap_df
 
     # Show results outside the form if prediction is made
     if st.session_state.get('prediction_made'):
         st.markdown("---")
-        st.markdown("### 📊 Prediction Result")
         
-        prob = st.session_state['prediction_prob']
-        risk_level = prediction_result_card(prob)
-        st.session_state['risk_level'] = risk_level
+        # Two columns for Prediction and SHAP
+        res_col1, res_col2 = st.columns([1, 1.5])
+        
+        with res_col1:
+            st.markdown("### 📊 Prediction Result")
+            prob = st.session_state['prediction_prob']
+            risk_level = prediction_result_card(prob)
+            st.session_state['risk_level'] = risk_level
+            
+        with res_col2:
+            st.markdown("### 🧠 Explainable AI (SHAP)")
+            shap_fig = plot_local_shap(st.session_state['shap_df'])
+            st.plotly_chart(shap_fig, use_container_width=True)
         
         st.markdown("### 🤖 AI Insights & Recommendations")
         for insight in st.session_state['insights']:
